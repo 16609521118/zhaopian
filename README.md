@@ -42,14 +42,17 @@ git remote add origin https://github.com/<你的用户名>/<仓库名>.git
 git push -u origin main
 ```
 
-## Codemagic 构建
+## Codemagic 构建（无签名直接打包）
 
 1. 在 [codemagic.io](https://codemagic.io/start) 用 GitHub 登录并添加本仓库
-2. 配置 Apple Developer 签名（Codemagic → App → Signing；Bundle ID 默认 `com.foldermount.ios`，可在 Xcode 工程中修改）
-3. 推送代码触发构建：
-   - `ios-compile-check`：无签名编译检查
-   - `ios-sign-and-publish`：签名打包并上传 TestFlight
-4. 安装到手机：从 TestFlight 或 Ad Hoc 分发下载
+2. 推送代码触发构建（workflow：`ios-unsigned-build`），**无需配置任何 Apple 证书**
+3. 构建产物（在 Codemagic 构建页的 Artifacts 中下载）：
+   - `FolderMount-unsigned.ipa`：无签名 IPA（Payload 结构）
+   - `FolderMount.app`：无签名应用包
+4. 说明：无签名产物不能直接安装到未越狱 iPhone（iOS 要求签名）。可用于：
+   - 后续手动签名（自签工具 / 企业证书 / Ad Hoc）
+   - 模拟器与调试用途
+   - 需要签名安装包时，把 `ios_signing` 配置加回 `codemagic.yaml` 即可
 
 ## 项目结构
 
