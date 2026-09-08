@@ -1431,6 +1431,25 @@ function dbDelete(store, key) {
 // ==========================================
 // 是否为 iOS 原生模式（WKWebView 内通过 nativeBridge 访问本地文件系统）
 const IS_NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.nativeBridge);
+// 是否为 iOS 设备（用于旧版本 App 缺少原生桥接时的提示）
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// 统一调用原生桥接，失败时返回 false 并提示
+function nativePost(action, payload) {
+  if (!IS_NATIVE || !window.webkit.messageHandlers.nativeBridge) {
+    console.warn('nativeBridge 不可用，action=' + action);
+    return false;
+  }
+  try {
+    window.webkit.messageHandlers.nativeBridge.postMessage(Object.assign({ action: action }, payload || {}));
+    return true;
+  } catch (e) {
+    console.error('nativeBridge 调用失败：', e);
+    showToast('调用系统功能失败：' + e.message);
+    return false;
+  }
+}
 
 const state = {
   folders: [],
@@ -2061,7 +2080,7 @@ function importMediaToFolder() {
   }
   if (IS_NATIVE) {
     // iOS 原生：弹出「文件」App 多选图片/视频
-    window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'importMedia', folderId: state.currentFolderId });
+    nativePost('importMedia', { folderId: state.currentFolderId });
     return;
   }
   const input = document.getElementById('input-media');
@@ -2115,7 +2134,12 @@ function mountFolder() {
   setTimeout(() => {
     if (IS_NATIVE) {
       // iOS 原生：弹出「文件」App 的文件夹选择器
-      window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'mountFolder' });
+      nativePost('mountFolder');
+      return;
+    }
+    if (IS_IOS) {
+      // iOS 上缺少原生桥接 = 安装的是旧版本 App，webkitdirectory 不可用
+      showToast('当前安装的版本不支持挂载本地文件夹，请重新安装最新版 App');
       return;
     }
     // 桌面浏览器：webkitdirectory 选文件夹
@@ -2145,6 +2169,13 @@ window.__nativeMountResult = function (data) {
     renderFolderList();
     showToast(`已挂载「${folder.name}」· ${folder.items.length} 个文件`);
   }).catch(() => { showToast('保存失败'); });
+};
+
+// 挂载失败回调（由原生 evaluateJavaScript 调用）
+window.__nativeMountError = function (data) {
+  const msg = data && data.message ? data.message : '未知错误';
+  showToast('挂载失败：' + msg);
+  console.error('native mount error:', msg);
 };
 
 // 导入文件完成回调（由原生 evaluateJavaScript 调用）
@@ -2281,7 +2312,7 @@ function deleteFolder(folderId) {
       }
       if (IS_NATIVE) {
         // 通知原生删除沙盒中的挂载目录
-        window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'deleteFolder', folderId: folderId });
+        nativePost('deleteFolder', { folderId: folderId });
       }
       state.folders = state.folders.filter(f => f.id !== folderId);
       renderFolderList();
@@ -2545,7 +2576,7 @@ function bindEvents() {
         folder.items = folder.items.filter(i => i.id !== item.id);
         if (IS_NATIVE && item.url && item.url.indexOf('localapp://') === 0) {
           // 通知原生删除沙盒中的对应文件
-          window.webkit.messageHandlers.nativeBridge.postMessage({ action: 'deleteMedia', paths: [item.url.replace('localapp://media/', '')] });
+          nativePost('deleteMedia', { paths: [item.url.replace('localapp://media/', '')] });
         }
         state.favorites.delete(item.id);
         await saveFolder(folder);
