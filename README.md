@@ -74,7 +74,7 @@ PhotoViewer/
 | 环节 | 方案 |
 | --- | --- |
 | 选择文件夹 | 系统文件选择器 `UIDocumentPickerViewController`（.folder） |
-| 持久授权 | 安全作用域书签（`bookmarkData(.withSecurityScope)`），先 `startAccessing` 再生成书签；重启后 `resolvingBookmarkData` 还原 |
+| 持久授权 | 安全作用域书签（iOS 现行文档：`bookmarkData(options: .minimalBookmark)`），先 `startAccessing` 再生成书签；重启后 `resolvingBookmarkData` 还原 |
 | 文件提供 | 本地回环 HTTP 服务（127.0.0.1:8765），支持 Range；**不复制文件、原位访问**，iCloud 文件按需下载 |
 | 页面加载 | 网页从本地 HTTP 服务加载（与媒体同源，规避 iOS 26 自定义 scheme 兼容问题） |
 | 视频播放 | 原生 `AVPlayerViewController`（点击查看器中的视频占位图唤起） |
