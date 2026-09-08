@@ -6,7 +6,7 @@
 # 使用步骤：
 #   1. 把整个项目（含本文件）推送到 GitHub / GitLab / Bitbucket 仓库
 #   2. 在 Codemagic 控制台点 "Add application" 关联该仓库
-#   3. 推送分支 / 创建 PR 会自动构建，也可在控制台手动触发
+#   3. 推送到 main / master 分支会自动构建，也可在控制台手动触发
 #   4. 构建完成后，在本次构建页面的 Artifacts 中下载 IPA
 #
 # 注意：本仓库已包含共享 Scheme（PhotoViewer.xcodeproj/xcshareddata/），
@@ -30,16 +30,6 @@ workflows:
         XCODE_SCHEME: PhotoViewer
         XCODE_CONFIGURATION: Release
         BUNDLE_ID: com.photoviewer.app   # 与 Xcode 工程中的 Bundle Identifier 保持一致
-
-    # 触发方式：推送任意分支 / 创建 PR 时自动构建（也可在 Codemagic 界面手动触发）
-    triggering:
-      events:
-        - push
-        - pull_request
-      branch_patterns:
-        - pattern: '*'
-          include: true
-          source: true
 
     scripts:
       - name: 构建 App（关闭代码签名）
@@ -73,70 +63,13 @@ workflows:
       - build/ios/*.zip
       - build/ios/Build/Products/Release-iphoneos/*.dSYM
 
-  # ----------------------------------------------------------
-  # 工作流二（默认注释）：签名构建 Ad Hoc IPA
-  # 需要：Apple Developer 账号 + 在 Codemagic 上传签名证书
-  # 启用步骤：
-  #   1. 取消下方所有 "#" 注释
-  #   2. 在 Codemagic 项目设置 > Signing 中上传 P12 证书与描述文件
-  #      （或在项目环境变量中配置 CM_CERTIFICATE / CM_CERTIFICATE_PASSWORD）
-  #   3. 重新触发构建
-  # ----------------------------------------------------------
-  # photo-viewer-signed:
-  #   name: PhotoViewer - 签名构建 Ad Hoc IPA（需开发者证书）
-  #   instance_type: mac_mini_m2
-  #   max_build_duration: 120
-  #
-  #   environment:
-  #     xcode: latest
-  #     ios_signing:
-  #       distribution_type: ad_hoc
-  #       bundle_identifier: com.photoviewer.app
-  #     vars:
-  #       XCODE_PROJECT: PhotoViewer.xcodeproj
-  #       XCODE_SCHEME: PhotoViewer
-  #
-  #   triggering:
-  #     events:
-  #       - push
-  #     branch_patterns:
-  #       - pattern: main
-  #         include: true
-  #         source: true
-  #
-  #   scripts:
-  #     - name: 归档并导出签名 IPA
-  #       script: |
-  #         set -e
-  #         xcodebuild -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" \
-  #           -configuration Release -sdk iphoneos \
-  #           -derivedDataPath build/ios \
-  #           -archivePath build/ios/PhotoViewer.xcarchive archive
-  #         # 生成 ad-hoc 导出配置
-  #         cat > build/ios/ExportOptions.plist <<'EOF'
-  #         <?xml version="1.0" encoding="UTF-8"?>
-  #         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-  #         <plist version="1.0">
-  #         <dict>
-  #           <key>method</key>
-  #           <string>ad-hoc</string>
-  #           <key>signingStyle</key>
-  #           <string>automatic</string>
-  #         </dict>
-  #         </plist>
-  #         EOF
-  #         xcodebuild -exportArchive \
-  #           -archivePath build/ios/PhotoViewer.xcarchive \
-  #           -exportOptionsPlist build/ios/ExportOptions.plist \
-  #           -exportPath build/ios/ipa
-  #
-  #   artifacts:
-  #     - build/ios/ipa/*.ipa
-  #
-  #   publishing:
-  #     email:
-  #       recipients:
-  #         - your@email.com
-  #       notify:
-  #         success: true
-  #         failure: true
+    # 触发方式：推送到 main / master 自动构建（也可在 Codemagic 界面手动触发）
+    trigger:
+      push:
+        branches:
+          - main
+          - master
+      branch_pull_request:
+        - pattern: '*'
+
+  
