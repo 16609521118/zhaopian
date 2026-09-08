@@ -45,6 +45,7 @@ class LocalFileSchemeHandler: NSObject, WKURLSchemeHandler {
             return
         }
 
+        // url.path 已是 percent-decoded 结果，这里再做一次幂等的解码兜底
         let relative = String(path.dropFirst(prefix.count)).removingPercentEncoding ?? ""
         guard !relative.isEmpty,
               !relative.contains(".."),
@@ -75,6 +76,7 @@ class LocalFileSchemeHandler: NSObject, WKURLSchemeHandler {
             var data: Data
             var statusCode = 200
             var contentRange: String?
+            var servedLength = fileSize
 
             if let range = Self.parseRange(rangeHeader, fileSize: fileSize) {
                 guard let handle = try? FileHandle(forReadingFrom: fileURL) else {
@@ -86,9 +88,11 @@ class LocalFileSchemeHandler: NSObject, WKURLSchemeHandler {
                 let length = range.end - range.start + 1
                 data = handle.readData(ofLength: length)
                 statusCode = 206
+                servedLength = length
                 contentRange = "bytes \(range.start)-\(range.end)/\(fileSize)"
             } else {
-                guard let d = try? Data(contentsOf: fileURL) else {
+                // 大文件使用 mmap 读取，避免整文件拷贝进内存
+                guard let d = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else {
                     self.fail(task, code: .cannotOpenFile)
                     return
                 }
@@ -107,7 +111,13 @@ class LocalFileSchemeHandler: NSObject, WKURLSchemeHandler {
                 headers["Content-Range"] = cr
             }
 
-            let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: "HTTP/1.1", headerFields: headers)!
+            // 自定义 scheme 下 HTTPURLResponse 构造可能返回 nil，做兜底避免崩溃
+            let response: URLResponse
+            if let http = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: "HTTP/1.1", headerFields: headers) {
+                response = http
+            } else {
+                response = URLResponse(url: url, mimeType: mime, expectedContentLength: servedLength, textEncodingName: nil)
+            }
 
             DispatchQueue.main.async {
                 guard let task = self.takeTask(task) else { return }

@@ -5,6 +5,8 @@
 //  "添加 本地"挂载配置页：名称 / 备注 / 选择目录 / 挂载本地目录。
 //  选中文件夹后复制到 App 沙盒 Documents/Mounted/，经 localapp:// scheme 离线访问。
 //  交互采用"选择目录 → 挂载"两步，避免系统文件夹选择器"点打开没反应"的困惑。
+//  复制在后台线程执行，避免大文件夹导致主线程卡死被系统杀掉；
+//  失败信息通过 onError 回传网页，用户能看到具体原因。
 //
 
 import UIKit
@@ -14,6 +16,8 @@ class NativeMountViewController: UIViewController, UIDocumentPickerDelegate {
 
     /// 挂载完成回调（payload 与网页 __nativeMountResult 入参一致）
     var onMount: (([String: Any]) -> Void)?
+    /// 挂载失败回调（message 回传网页 __nativeMountError）
+    var onError: ((String) -> Void)?
     /// 用户取消回调
     var onCancel: (() -> Void)?
 
@@ -29,6 +33,8 @@ class NativeMountViewController: UIViewController, UIDocumentPickerDelegate {
     private let chooseButton = UIButton(type: .system)
     private let hintLabel = UILabel()
     private let mountButton = UIButton(type: .system)
+
+    private var isMounting = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -211,11 +217,13 @@ class NativeMountViewController: UIViewController, UIDocumentPickerDelegate {
     // MARK: - 交互
 
     @objc private func closeTapped() {
+        guard !isMounting else { return }
         onCancel?()
         dismiss(animated: true)
     }
 
     @objc private func chooseTapped() {
+        guard !isMounting else { return }
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
         picker.delegate = self
         picker.allowsMultipleSelection = false
@@ -223,6 +231,7 @@ class NativeMountViewController: UIViewController, UIDocumentPickerDelegate {
     }
 
     @objc private func mountTapped() {
+        guard !isMounting else { return }
         guard let url = selectedFolderURL else {
             showAlert("请先选择目录")
             return
@@ -237,8 +246,6 @@ class NativeMountViewController: UIViewController, UIDocumentPickerDelegate {
         selectedFolderURL = url
         let name = url.lastPathComponent
         pathLabel.text = "我的 iPhone/\(name)"
-        // 触碰一次安全作用域，确保后续可访问
-        _ = url.startAccessingSecurityScopedResource()
     }
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
@@ -248,55 +255,140 @@ class NativeMountViewController: UIViewController, UIDocumentPickerDelegate {
     // MARK: - 挂载执行
 
     private func mountFolder(from sourceURL: URL) {
-        let folderId = "mnt-" + String(Int(Date().timeIntervalSince1970 * 1000))
-        let destRoot = LocalFileSchemeHandler.mountedRoot.appendingPathComponent(folderId, isDirectory: true)
         let fm = FileManager.default
         var isDir: ObjCBool = false
-
         guard fm.fileExists(atPath: sourceURL.path, isDirectory: &isDir), isDir.boolValue else {
-            showAlert("所选目录无效，请重新选择")
+            reportError("所选目录无效，请重新选择")
             return
         }
 
+        // 进入安全作用域（安全作用域是进程级的，在后台线程同样有效）
         let accessing = sourceURL.startAccessingSecurityScopedResource()
-        defer { if accessing { sourceURL.stopAccessingSecurityScopedResource() } }
 
-        do {
-            try fm.createDirectory(at: destRoot, withIntermediateDirectories: true)
+        let folderId = "mnt-" + String(Int(Date().timeIntervalSince1970 * 1000))
+        let destRoot = LocalFileSchemeHandler.mountedRoot.appendingPathComponent(folderId, isDirectory: true)
+        let folderName = nameField.text?.trimmingCharacters(in: .whitespaces) ?? "本地"
+
+        // 挂载中状态：禁用交互，避免重复触发
+        isMounting = true
+        mountButton.isEnabled = false
+        mountButton.setTitle("正在挂载…", for: .normal)
+        mountButton.backgroundColor = .systemGray
+        closeButton.isEnabled = false
+        chooseButton.isEnabled = false
+        nameField.isEnabled = false
+        noteField.isEnabled = false
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             var items: [[String: Any]] = []
-            if let enumerator = fm.enumerator(at: sourceURL, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey], options: [.skipsHiddenFiles]) {
-                for case let fileURL as URL in enumerator {
-                    let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
-                    guard values.isRegularFile == true else { continue }
-                    let filename = fileURL.lastPathComponent
-                    guard Self.isMediaFile(filename) else { continue }
-                    let rel = String(fileURL.path.dropFirst(sourceURL.path.count).dropFirst())
-                    let dest = destRoot.appendingPathComponent(rel)
-                    try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    if fm.fileExists(atPath: dest.path) {
-                        try? fm.removeItem(at: dest)
+            var failed = 0
+            var lastError = ""
+
+            do {
+                try fm.createDirectory(at: destRoot, withIntermediateDirectories: true)
+                if let enumerator = fm.enumerator(at: sourceURL,
+                                                  includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+                                                  options: [.skipsHiddenFiles]) {
+                    for case let fileURL as URL in enumerator {
+                        // 单个文件失败不中断整个挂载
+                        do {
+                            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+                            guard values.isRegularFile == true else { continue }
+                            let filename = fileURL.lastPathComponent
+                            guard Self.isMediaFile(filename) else { continue }
+                            let rel = String(fileURL.path.dropFirst(sourceURL.path.count).dropFirst())
+                            guard !rel.isEmpty else { continue }
+                            let dest = destRoot.appendingPathComponent(rel)
+                            try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+                            if fm.fileExists(atPath: dest.path) {
+                                try? fm.removeItem(at: dest)
+                            }
+                            do {
+                                try fm.copyItem(at: fileURL, to: dest)
+                            } catch {
+                                failed += 1
+                                lastError = error.localizedDescription
+                                continue
+                            }
+                            items.append([
+                                "id": rel,
+                                "name": filename,
+                                "url": "localapp://media/\(folderId)/\(Self.encodePath(rel))",
+                                "type": Self.isVideoFile(filename) ? "video" : "image",
+                                "size": values.fileSize ?? 0
+                            ])
+                        } catch {
+                            failed += 1
+                            lastError = error.localizedDescription
+                        }
                     }
-                    try fm.copyItem(at: fileURL, to: dest)
-                    items.append([
-                        "id": rel,
-                        "name": filename,
-                        "url": "localapp://media/\(folderId)/\(Self.encodePath(rel))",
-                        "type": Self.isVideoFile(filename) ? "video" : "image",
-                        "size": values.fileSize ?? 0
-                    ])
                 }
+            } catch {
+                DispatchQueue.main.async {
+                    self?.finishMount(accessing: accessing, error: "无法创建挂载目录：\(error.localizedDescription)")
+                }
+                return
             }
-            let folderName = nameField.text?.trimmingCharacters(in: .whitespaces) ?? "本地"
-            let payload: [String: Any] = [
-                "folderId": folderId,
-                "name": folderName.isEmpty ? "本地" : folderName,
-                "items": items
-            ]
-            onMount?(payload)
-            dismiss(animated: true)
-        } catch {
-            showAlert("挂载失败：\(error.localizedDescription)")
+
+            if accessing {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.isMounting = false
+                self.mountButton.isEnabled = true
+                self.mountButton.setTitle("挂载本地目录", for: .normal)
+                self.mountButton.backgroundColor = .systemBlue
+                self.closeButton.isEnabled = true
+                self.chooseButton.isEnabled = true
+                self.nameField.isEnabled = true
+                self.noteField.isEnabled = true
+
+                if items.isEmpty {
+                    if failed > 0 {
+                        self.reportError("无法读取所选文件夹中的图片或视频（\(failed) 个文件读取失败，\(lastError)）")
+                    } else {
+                        // 目录里没有媒体文件：正常回调，网页会提示"未找到图片或视频"
+                        self.onMount?([
+                            "folderId": folderId,
+                            "name": folderName.isEmpty ? "本地" : folderName,
+                            "items": []
+                        ])
+                        self.dismiss(animated: true)
+                    }
+                    return
+                }
+
+                let payload: [String: Any] = [
+                    "folderId": folderId,
+                    "name": folderName.isEmpty ? "本地" : folderName,
+                    "items": items
+                ]
+                self.onMount?(payload)
+                self.dismiss(animated: true)
+            }
         }
+    }
+
+    private func finishMount(accessing: Bool, error: String) {
+        if accessing {
+            selectedFolderURL?.stopAccessingSecurityScopedResource()
+        }
+        isMounting = false
+        mountButton.isEnabled = true
+        mountButton.setTitle("挂载本地目录", for: .normal)
+        mountButton.backgroundColor = .systemBlue
+        closeButton.isEnabled = true
+        chooseButton.isEnabled = true
+        nameField.isEnabled = true
+        noteField.isEnabled = true
+        reportError(error)
+    }
+
+    private func reportError(_ message: String) {
+        onError?(message)
+        showAlert(message)
     }
 
     // MARK: - 工具

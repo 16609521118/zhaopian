@@ -222,6 +222,10 @@ extension ViewController: WKScriptMessageHandler {
             guard let self = self else { return }
             self.evaluateJS("window.__nativeMountResult(\(Self.jsonString(payload)))")
         }
+        vc.onError = { [weak self] message in
+            guard let self = self else { return }
+            self.evaluateJS("window.__nativeMountError(\(Self.jsonString(["message": message])))")
+        }
         vc.onCancel = nil
         mountConfigController = vc
         vc.modalPresentationStyle = .fullScreen
