@@ -6,7 +6,7 @@
 # 使用步骤：
 #   1. 把整个项目（含本文件）推送到 GitHub / GitLab / Bitbucket 仓库
 #   2. 在 Codemagic 控制台点 "Add application" 关联该仓库
-#   3. 推送到 main / master 分支会自动构建，也可在控制台手动触发
+#   3. 推送分支 / 创建 PR 会自动构建，也可在控制台手动触发
 #   4. 构建完成后，在本次构建页面的 Artifacts 中下载 IPA
 #
 # 注意：本仓库已包含共享 Scheme（PhotoViewer.xcodeproj/xcshareddata/），
@@ -30,6 +30,16 @@ workflows:
         XCODE_SCHEME: PhotoViewer
         XCODE_CONFIGURATION: Release
         BUNDLE_ID: com.photoviewer.app   # 与 Xcode 工程中的 Bundle Identifier 保持一致
+
+    # 触发方式：推送任意分支 / 创建 PR 时自动构建（也可在 Codemagic 界面手动触发）
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: '*'
+          include: true
+          source: true
 
     scripts:
       - name: 构建 App（关闭代码签名）
@@ -63,15 +73,6 @@ workflows:
       - build/ios/*.zip
       - build/ios/Build/Products/Release-iphoneos/*.dSYM
 
-    # 触发方式：推送到 main / master 自动构建（也可在 Codemagic 界面手动触发）
-    trigger:
-      push:
-        branches:
-          - main
-          - master
-      branch_pull_request:
-        - pattern: '*'
-
   # ----------------------------------------------------------
   # 工作流二（默认注释）：签名构建 Ad Hoc IPA
   # 需要：Apple Developer 账号 + 在 Codemagic 上传签名证书
@@ -94,6 +95,14 @@ workflows:
   #     vars:
   #       XCODE_PROJECT: PhotoViewer.xcodeproj
   #       XCODE_SCHEME: PhotoViewer
+  #
+  #   triggering:
+  #     events:
+  #       - push
+  #     branch_patterns:
+  #       - pattern: main
+  #         include: true
+  #         source: true
   #
   #   scripts:
   #     - name: 归档并导出签名 IPA
