@@ -5,16 +5,16 @@
 ## 功能特性
 
 - 🖼️ **图片浏览**：网格视图、全屏查看、双指缩放、左右滑动切换
-- 🎬 **视频播放**：全屏播放器、播放/暂停、进度拖动、全屏模式
-- 📁 **文件夹挂载**：从 iOS「文件」App 选择文件夹，自动读取其中所有图片和视频，持久缓存
+- 🎬 **视频播放**：原生 AVPlayer 全屏播放（iOS 26 兼容）
+- 📁 **文件夹挂载**：从 iOS「文件」App 选择文件夹，**安全作用域书签持久挂载，不复制文件、原位访问**（支持 iCloud 云盘按需下载）
 - ⭐ **收藏功能**：标记喜欢的媒体文件
 - 💾 **本地保存**：保存图片/视频到系统相册
 - 🎨 **iOS 原生体验**：毛玻璃导航栏、底部工具栏、启动页、App 图标
 
 ## 系统要求
 
-- iOS 14.0+
-- Xcode 14.0+
+- iOS 14.0+（在 iOS 26 上经过针对性适配）
+- Xcode 15.0+
 - macOS 12.0+（编译环境）
 
 ## 编译安装步骤
@@ -54,8 +54,11 @@ PhotoViewer/
 │   └── project.pbxproj
 ├── PhotoViewer/                # 源代码目录
 │   ├── AppDelegate.swift       # 应用入口
-│   ├── ViewController.swift     # 主视图控制器（WKWebView）
-│   ├── Info.plist              # 应用配置
+│   ├── ViewController.swift    # 主视图控制器（WKWebView + 原生桥接 + AVPlayer）
+│   ├── LocalHTTPServer.swift   # 本地回环 HTTP 服务（页面与媒体资源、Range 支持）
+│   ├── MountedFolderStore.swift# 挂载书签持久化（安全作用域 Bookmark）
+│   ├── NativeMountViewController.swift # "添加 本地"挂载配置页
+│   ├── Info.plist              # 应用配置（ATS 本地网络）
 │   ├── Assets.xcassets/        # 资源目录（图标等）
 │   │   ├── AppIcon.appiconset/
 │   │   └── Contents.json
@@ -65,6 +68,20 @@ PhotoViewer/
 │       └── index.html          # 网页应用（核心功能）
 └── README.md
 ```
+
+## 本地挂载的实现原理（v3 / iOS 26）
+
+| 环节 | 方案 |
+| --- | --- |
+| 选择文件夹 | 系统文件选择器 `UIDocumentPickerViewController`（.folder） |
+| 持久授权 | 安全作用域书签（`bookmarkData(.withSecurityScope)`），先 `startAccessing` 再生成书签；重启后 `resolvingBookmarkData` 还原 |
+| 文件提供 | 本地回环 HTTP 服务（127.0.0.1:8765），支持 Range；**不复制文件、原位访问**，iCloud 文件按需下载 |
+| 页面加载 | 网页从本地 HTTP 服务加载（与媒体同源，规避 iOS 26 自定义 scheme 兼容问题） |
+| 视频播放 | 原生 `AVPlayerViewController`（点击查看器中的视频占位图唤起） |
+| 视频缩略图 | 原生 `AVAssetImageGenerator` 生成，经 HTTP 提供给网页 |
+| 导入文件 | 复制到 App 沙盒 `Documents/Imported/`，路径前缀 `__imports__/` |
+
+> iOS 26 说明：自定义 URL Scheme（如 localapp://）配合 HTML5 视频在 iOS 26 存在兼容问题（媒体元素加载失败、含脚本页面触发 WebKit 终止），v3 已全部改为本地 HTTP + 原生播放，无需自定义 scheme。
 
 ## 自定义修改
 
@@ -83,15 +100,16 @@ PhotoViewer/
 ## 注意事项
 
 1. **免费 Apple ID 签名有效期 7 天**：7 天后需要重新用 Xcode 安装一次（AltStore 可以自动续签）
-2. **视频格式**：iOS 原生支持 mp4（H.264/H.265）和 mov，其他格式（mkv、avi 等）可能无法播放
-3. **存储限制**：挂载的媒体文件存储在 App 的沙盒中，卸载 App 会清除所有数据
-4. **文件夹刷新**：由于 iOS 沙盒限制，网页无法后台监控文件夹变化，新增文件需要手动点「刷新」重新选择
+2. **视频格式**：iOS 原生支持 mp4（H.264/H.265）和 mov，其他格式（mkv、avi 等）可能无法原生播放
+3. **挂载不复制文件**：书签挂载的文件夹（我的 iPhone / iCloud）中的文件仍属于用户，卸载 App 只清除书签记录，不会删除用户文件
+4. **删除媒体**：书签挂载目录内的文件归用户所有，App 不会删除；只有「导入」到 App 内的文件可以删除
+5. **文件夹刷新**：由于 iOS 沙盒限制，网页无法后台监控文件夹变化，重新打开文件夹即可看到新增文件
 
 ## 技术栈
 
-- **原生层**：Swift 5 + UIKit + WKWebView
+- **原生层**：Swift 5 + UIKit + WKWebView + Network.framework（本地 HTTP）+ AVKit（原生播放）
 - **网页层**：原生 HTML/CSS/JavaScript（单文件，无框架依赖）
-- **数据存储**：IndexedDB（浏览器端持久化）
+- **数据存储**：IndexedDB（网页层文件夹列表）+ UserDefaults（原生书签）
 
 ## 许可证
 
