@@ -1,0 +1,99 @@
+# Codemagic 构建配置（原生 iOS）
+# 文档：https://docs.codemagic.io/yaml/building-a-react-native-app/ 或
+#       https://docs.codemagic.io/yaml/building-a-native-ios-app/
+#
+# 使用方法：
+#   1. 把本仓库推送到你的 GitHub 账号
+#   2. 在 Codemagic (https://codemagic.io/start) 用 GitHub 登录，添加本仓库
+#   3. 首次构建前在 Codemagic → 你的 App → Signing 中配置 Apple Developer 证书
+#      （Codemagic 会自动生成并上传证书，或在 App Store Connect 配置 API Key）
+#   4. 推送代码或点击 Build 即可触发构建
+
+workflows:
+  # 无签名构建：只验证代码能否编译通过，适合日常 CI 检查
+  ios-compile-check:
+    name: iOS 编译检查
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: 解析 Swift Package 依赖
+        script: |
+          xcodebuild -resolvePackageDependencies \
+            -project FolderMount.xcodeproj \
+            -scheme FolderMount
+      - name: 编译（Release，无签名）
+        script: |
+          xcodebuild \
+            -project FolderMount.xcodeproj \
+            -scheme FolderMount \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee /tmp/xcodebuild.log | tail -n 20
+          # 失败时输出完整日志
+          set -e
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            grep -E "error:|warning:" /tmp/xcodebuild.log || true
+            exit ${PIPESTATUS[0]}
+          fi
+    artifacts:
+      - build/Build/Products/Release-iphoneos/*.app
+      - /tmp/xcodebuild.log
+    publishing:
+      email:
+        recipients:
+          - you@example.com   # ← 改成你的邮箱，可选
+        notify:
+          success: true
+          failure: true
+
+  # 签名构建：安装到真机（Ad Hoc）或上传 TestFlight（App Store）
+  ios-sign-and-publish:
+    name: iOS 签名构建与发布
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+    environment:
+      ios_signing:
+        distribution_type: app_store   # 或 ad_hoc（真机测试）
+        bundle_identifier: com.foldermount.ios   # ← 改成你在 Apple Developer 注册的 Bundle ID
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: 解析 Swift Package 依赖
+        script: |
+          xcodebuild -resolvePackageDependencies \
+            -project FolderMount.xcodeproj \
+            -scheme FolderMount
+      - name: 签名编译并打包 IPA
+        script: |
+          xcodebuild -project FolderMount.xcodeproj \
+            -scheme FolderMount \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/FolderMount.xcarchive \
+            -allowProvisioningUpdates \
+            archive
+          xcodebuild -exportArchive \
+            -archivePath build/FolderMount.xcarchive \
+            -exportOptionsPlist build/exportOptions.plist \
+            -exportPath build/exported
+    artifacts:
+      - build/exported/*.ipa
+      - build/FolderMount.xcarchive/dSYMs
+      - /tmp/xcodebuild.log
+    publishing:
+      app_store_connect:    # 需在 Codemagic 配置 App Store Connect API Key
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - 内部测试
+      email:
+        recipients:
+          - you@example.com   # ← 改成你的邮箱，可选
+        notify:
+          success: true
+          failure: true
