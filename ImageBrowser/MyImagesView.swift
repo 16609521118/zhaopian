@@ -43,17 +43,25 @@ struct MyImagesView: View {
         NavigationStack {
             Group {
                 if images.isEmpty {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 14) {
                         Image(systemName: "folder.badge.plus")
                             .font(.system(size: 44))
                             .foregroundStyle(.secondary)
                         Text("还没有图片")
                             .font(.headline)
-                        Text("点击右上角从文件夹或相册导入图片或视频\n文件会复制保存到本应用内")
+                        Text("导入方式：\n① 右上角 📷 从相册导入（已可用）\n② 右上角 📁 从文件夹选择，点文件后点「打开」\n③ 系统「文件」App → 我的 iPhone → 图览，\n   把图片放进来后点下方「刷新」")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                        Button {
+                            reload()
+                        } label: {
+                            Label("刷新", systemImage: "arrow.clockwise")
+                                .font(.subheadline)
+                        }
+                        .buttonStyle(.bordered)
                     }
+                    .padding(.horizontal, 24)
                 } else {
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 4) {
@@ -108,13 +116,13 @@ struct MyImagesView: View {
             .fileImporter(
                 isPresented: $showFileImporter,
                 allowedContentTypes: [.image, .movie],
-                allowsMultipleSelection: true
+                allowsMultipleSelection: false
             ) { result in
                 switch result {
                 case .success(let urls):
                     importItems(urls)
                 case .failure:
-                    showToast("无法访问所选文件")
+                    showToast("未选择文件")
                 }
                 tabRouter.selection = 1
             }

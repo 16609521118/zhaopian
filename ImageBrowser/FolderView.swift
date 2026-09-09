@@ -29,7 +29,7 @@ struct MountedFoldersView: View {
                             .foregroundStyle(.secondary)
                         Text("还没有挂载文件夹")
                             .font(.headline)
-                        Text("点击右上角 + 选择本地文件夹\n挂载后可直接浏览其中的图片，文件不会复制\n提示：请在文件选择器中切到「浏览」页再选文件夹")
+                        Text("挂载方式：\n① 点右上角 + ，在文件选择器切到「浏览」\n② 找到要挂载的文件夹，点它一下（选中）\n③ 点右上角「打开」，即可在此浏览其中图片\n\n提示：挂载后文件不会复制，直接读取原位置")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -93,22 +93,18 @@ struct MountedFoldersView: View {
             .fileImporter(
                 isPresented: $showFolderImporter,
                 allowedContentTypes: [.folder],
-                allowsMultipleSelection: true
+                allowsMultipleSelection: false
             ) { result in
                 switch result {
                 case .success(let urls):
-                    var ok = 0
-                    for url in urls {
+                    if let url = urls.first {
                         if let err = vm.mount(url: url) {
                             showToast("挂载失败：\(err)")
-                            return
+                        } else {
+                            showToast("已挂载 1 个文件夹")
                         }
-                        ok += 1
-                    }
-                    if ok > 0 {
-                        showToast(ok > 1 ? "已挂载 \(ok) 个文件夹" : "已挂载 1 个文件夹")
                     } else {
-                        showToast("挂载失败，请重试")
+                        showToast("未选择文件夹")
                     }
                 case .failure:
                     showToast("未选择文件夹")
