@@ -14,7 +14,6 @@ struct ContentView: View {
 /// 挂载列表（主界面）：显示已挂载的本地文件夹
 struct FolderListView: View {
     @EnvironmentObject private var vm: FolderViewModel
-    @State private var showForm = false
 
     var body: some View {
         Group {
@@ -61,17 +60,15 @@ struct FolderListView: View {
         .navigationTitle("本地")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showForm = true
+                // 用推入式页面打开配置页（不用 sheet），避免模态层叠加导致系统选择器回调失效
+                NavigationLink {
+                    MountFormView()
+                        .environmentObject(vm)
                 } label: {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("添加本地文件夹")
             }
-        }
-        .sheet(isPresented: $showForm) {
-            MountFormView()
-                .environmentObject(vm)
         }
         .navigationDestination(for: MountedFolder.self) { folder in
             FolderBrowserView(root: folder.url)

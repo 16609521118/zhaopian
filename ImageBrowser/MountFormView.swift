@@ -61,13 +61,13 @@ struct MountFormView: View {
             }
             .navigationTitle("添加 本地")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-            }
             .alert("选择文件夹", isPresented: $showPickerAlert) {
-                Button("开始选择") { showPicker = true }
+                Button("开始选择") {
+                    // 等 alert 完全收起后再弹系统选择器，避免模态切换竞态
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                        showPicker = true
+                    }
+                }
                 Button("取消", role: .cancel) {}
             } message: {
                 Text("进入目标文件夹后，点右上角蓝色「打开」完成选择")
