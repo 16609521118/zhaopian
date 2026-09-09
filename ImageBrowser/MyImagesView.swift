@@ -153,7 +153,7 @@ struct MyImagesView: View {
             return
         }
         var imported = 0
-        var failed: [String] = []
+        var failed: [(String, String)] = []
         for url in urls {
             let opened = url.startAccessingSecurityScopedResource()
             defer {
@@ -164,11 +164,19 @@ struct MyImagesView: View {
             if fm.fileExists(atPath: imagesDirectory.appendingPathComponent(name).path) {
                 name = "\(UUID().uuidString.prefix(8))_\(base)"
             }
+            let dest = imagesDirectory.appendingPathComponent(name)
             do {
-                try fm.copyItem(at: url, to: imagesDirectory.appendingPathComponent(name))
+                try fm.copyItem(at: url, to: dest)
                 imported += 1
-            } catch {
-                failed.append(base)
+            } catch let copyError {
+                // 兜底：部分云盘 provider 返回虚拟路径，copyItem 失败时改用数据流读取
+                do {
+                    let data = try Data(contentsOf: url)
+                    try data.write(to: dest)
+                    imported += 1
+                } catch {
+                    failed.append((base, copyError.localizedDescription + " / " + error.localizedDescription))
+                }
             }
         }
         reload()
@@ -176,7 +184,8 @@ struct MyImagesView: View {
             showToast("已导入 \(imported) 个文件")
         }
         if !failed.isEmpty {
-            showToast("导入失败：\(failed.joined(separator: "、"))")
+            let detail = failed.prefix(2).map { "\($0.0)：\($0.1)" }.joined(separator: "；")
+            showToast("导入失败：" + detail)
         }
     }
 

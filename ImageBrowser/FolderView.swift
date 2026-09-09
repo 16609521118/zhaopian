@@ -99,7 +99,11 @@ struct MountedFoldersView: View {
                 case .success(let urls):
                     var ok = 0
                     for url in urls {
-                        if vm.mount(url: url) { ok += 1 }
+                        if let err = vm.mount(url: url) {
+                            showToast("挂载失败：\(err)")
+                            return
+                        }
+                        ok += 1
                     }
                     if ok > 0 {
                         showToast(ok > 1 ? "已挂载 \(ok) 个文件夹" : "已挂载 1 个文件夹")

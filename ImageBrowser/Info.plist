@@ -22,6 +22,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>启动局域网映射服务需要访问本地网络，以便电脑通过局域网地址访问本应用内的文件。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
