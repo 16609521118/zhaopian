@@ -71,7 +71,7 @@ func makeLocalFileInfo(url: URL) async -> LocalFileInfo {
             let w = props[kCGImagePropertyPixelWidth] as? Int ?? 0
             let h = props[kCGImagePropertyPixelHeight] as? Int ?? 0
             if w > 0 && h > 0 {
-                rows.append(InfoRow(key: "尺寸", value: "\(w) × \(h) 像素（约 \(Double(w * h) / 1_000_000.0, specifier: "%.1f") MP）"))
+                rows.append(InfoRow(key: "尺寸", value: "\(w) × \(h) 像素（约 " + String(format: "%.1f", Double(w * h) / 1_000_000.0) + " MP）"))
                 rows.append(InfoRow(key: "宽高比", value: String(format: "%.3f", Double(w) / Double(h))))
             }
             let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
@@ -84,7 +84,7 @@ func makeLocalFileInfo(url: URL) async -> LocalFileInfo {
                 rows.append(InfoRow(key: "设备型号", value: model))
             }
             if let fnumber = exif?[kCGImagePropertyExifFNumber] as? NSNumber {
-                rows.append(InfoRow(key: "光圈", value: "f/\(fnumber.doubleValue, specifier: "%.1f")"))
+                rows.append(InfoRow(key: "光圈", value: "f/" + String(format: "%.1f", fnumber.doubleValue)))
             }
             if let expo = exif?[kCGImagePropertyExifExposureTime] as? NSNumber {
                 let t = expo.doubleValue
@@ -96,7 +96,7 @@ func makeLocalFileInfo(url: URL) async -> LocalFileInfo {
                 rows.append(InfoRow(key: "ISO", value: "\(iso.intValue)"))
             }
             if let focal = exif?[kCGImagePropertyExifFocalLength] as? NSNumber {
-                rows.append(InfoRow(key: "焦距", value: "\(focal.doubleValue, specifier: "%.0f") mm"))
+                rows.append(InfoRow(key: "焦距", value: String(format: "%.0f mm", focal.doubleValue)))
             }
             if let bias = exif?[kCGImagePropertyExifExposureBiasValue] as? NSNumber {
                 rows.append(InfoRow(key: "曝光补偿", value: String(format: "%+.1f EV", bias.doubleValue)))
