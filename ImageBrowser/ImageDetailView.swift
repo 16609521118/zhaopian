@@ -91,8 +91,13 @@ struct ImageDetailView: View {
             info["拍摄时间"] = dateFormatter.string(from: date)
         }
         info["尺寸"] = "\(asset.pixelWidth) × \(asset.pixelHeight)"
-        let size = resources.first?.size ?? 0
-        info["大小"] = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+        var sizeText = "—"
+        if let url = resources.first?.fileURL,
+           let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let s = attrs[.size] as? NSNumber {
+            sizeText = ByteCountFormatter.string(fromByteCount: s.int64Value, countStyle: .file)
+        }
+        info["大小"] = sizeText
         info["类型"] = asset.mediaType == .video ? "视频" : "图片"
         return info
     }
