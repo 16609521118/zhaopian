@@ -47,11 +47,18 @@ final class DocumentPickerPresenter: NSObject, UIDocumentPickerDelegate {
     /// 找当前最顶层的控制器（激活场景 → key 窗口 → presentedViewController 链）
     private static func topViewController() -> UIViewController? {
         let scenes = UIApplication.shared.connectedScenes
-        guard let scene = (scenes.first { ($0 as? UIWindowScene)?.activationState == .foregroundActive }) as? UIWindowScene
-                ?? scenes.first as? UIWindowScene else {
-            return nil
+        var windowScene: UIWindowScene?
+        for scene in scenes {
+            if let ws = scene as? UIWindowScene, ws.activationState == .foregroundActive {
+                windowScene = ws
+                break
+            }
         }
-        let window = scene.windows.first { $0.isKeyWindow } ?? scene.windows.first
+        if windowScene == nil {
+            windowScene = scenes.first as? UIWindowScene
+        }
+        guard let windowScene else { return nil }
+        let window = windowScene.windows.first { $0.isKeyWindow } ?? windowScene.windows.first
         var top = window?.rootViewController
         while let presented = top?.presentedViewController {
             top = presented
