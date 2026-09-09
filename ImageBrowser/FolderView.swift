@@ -15,7 +15,9 @@ struct FolderItem: Identifiable {
 /// “文件夹”页：挂载管理 + 目录浏览（正规的本地文件夹映射，非复制）
 struct MountedFoldersView: View {
     @EnvironmentObject private var vm: FolderViewModel
+    @EnvironmentObject private var tabRouter: TabRouter
     @State private var toast: String?
+    @State private var showFolderImporter = false
 
     var body: some View {
         NavigationStack {
@@ -27,7 +29,7 @@ struct MountedFoldersView: View {
                             .foregroundStyle(.secondary)
                         Text("还没有挂载文件夹")
                             .font(.headline)
-                        Text("点击右上角 + 选择本地文件夹\n挂载后可直接浏览其中的图片，文件不会复制")
+                        Text("点击右上角 + 选择本地文件夹\n挂载后可直接浏览其中的图片，文件不会复制\n提示：请在文件选择器中切到「浏览」页再选文件夹")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -81,25 +83,33 @@ struct MountedFoldersView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        DocumentPickerPresenter.shared.present(
-                            contentTypes: [.folder],
-                            allowsMultipleSelection: true
-                        ) { urls in
-                            var ok = 0
-                            for url in urls {
-                                if vm.mount(url: url) { ok += 1 }
-                            }
-                            if ok > 0 {
-                                showToast(ok > 1 ? "已挂载 \(ok) 个文件夹" : "已挂载 1 个文件夹")
-                            } else {
-                                showToast("挂载失败，请重试")
-                            }
-                        }
+                        showFolderImporter = true
                     } label: {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("挂载文件夹")
                 }
+            }
+            .fileImporter(
+                isPresented: $showFolderImporter,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: true
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    var ok = 0
+                    for url in urls {
+                        if vm.mount(url: url) { ok += 1 }
+                    }
+                    if ok > 0 {
+                        showToast(ok > 1 ? "已挂载 \(ok) 个文件夹" : "已挂载 1 个文件夹")
+                    } else {
+                        showToast("挂载失败，请重试")
+                    }
+                case .failure:
+                    showToast("未选择文件夹")
+                }
+                tabRouter.selection = 2
             }
             .overlay(alignment: .top) {
                 if let toast {

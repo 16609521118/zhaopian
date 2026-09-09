@@ -20,13 +20,15 @@ struct PlaybackSelection: Identifiable {
     let index: Int
 }
 
-/// “我的图片”页：从文件夹（文件选择器）或相册导入图片/视频到 App 沙盒内浏览管理
+/// “我的图片”页：从文件夹（系统文件选择器）或相册导入图片/视频到 App 沙盒内浏览管理
 struct MyImagesView: View {
+    @EnvironmentObject private var tabRouter: TabRouter
     @State private var images: [ImportedImage] = []
     @State private var viewerSelection: ViewerSelection?
     @State private var playbackSelection: PlaybackSelection?
     @State private var toast: String?
     @State private var photosPickerItems: [PhotosPickerItem] = []
+    @State private var showFileImporter = false
 
     private let columns = [
         GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 4)
@@ -96,17 +98,25 @@ struct MyImagesView: View {
                     .accessibilityLabel("从相册导入")
 
                     Button {
-                        DocumentPickerPresenter.shared.present(
-                            contentTypes: [.image, .movie],
-                            allowsMultipleSelection: true
-                        ) { urls in
-                            importItems(urls)
-                        }
+                        showFileImporter = true
                     } label: {
                         Image(systemName: "folder.badge.plus")
                     }
                     .accessibilityLabel("从文件夹导入")
                 }
+            }
+            .fileImporter(
+                isPresented: $showFileImporter,
+                allowedContentTypes: [.image, .movie],
+                allowsMultipleSelection: true
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    importItems(urls)
+                case .failure:
+                    showToast("无法访问所选文件")
+                }
+                tabRouter.selection = 1
             }
             .onChange(of: photosPickerItems) { items in
                 guard !items.isEmpty else { return }
@@ -173,6 +183,13 @@ struct MyImagesView: View {
     // MARK: - 导入（从系统相册）
 
     private func importPhotos(_ items: [PhotosPickerItem]) async {
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
+        } catch {
+            showToast("无法创建导入目录")
+            return
+        }
         var imported = 0
         var failed = 0
         for item in items {
