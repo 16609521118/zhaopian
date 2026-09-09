@@ -92,16 +92,12 @@ struct MyImagesView: View {
                     .accessibilityLabel("从文件夹导入")
                 }
             }
-            .fileImporter(
-                isPresented: $showImporter,
-                allowedContentTypes: [.image, .movie],
-                allowsMultipleSelection: true
-            ) { result in
-                switch result {
-                case .success(let urls):
+            .sheet(isPresented: $showImporter) {
+                DocumentPicker(
+                    contentTypes: [.image, .movie],
+                    allowsMultipleSelection: true
+                ) { urls in
                     Task { await importItems(urls) }
-                case .failure:
-                    break
                 }
             }
             .task {
@@ -245,9 +241,7 @@ struct LocalImageViewer: View {
                 }
             }
             .sheet(isPresented: $showInfo) {
-                if let fileInfo {
-                    LocalFileInfoView(info: fileInfo)
-                }
+                LocalFileInfoView(info: fileInfo)
             }
             .task(id: index) {
                 fileInfo = await makeLocalFileInfo(url: images[index].url)

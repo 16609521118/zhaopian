@@ -30,80 +30,133 @@ struct PermissionView: View {
 
 // MARK: - 本地文件信息（详情）
 
-struct LocalFileInfo: Identifiable {
+struct InfoRow: Identifiable {
     let id = UUID()
-    let name: String
-    let kindText: String
-    let sizeText: String
-    let modifiedText: String
+    let key: String
+    let value: String
 }
 
-/// 生成本地文件（图片/视频）详情信息
+struct LocalFileInfo: Identifiable {
+    let id = UUID()
+    let rows: [InfoRow]
+}
+
+/// 生成本地文件（图片/视频）超详细详情信息
 func makeLocalFileInfo(url: URL) async -> LocalFileInfo {
     let fm = FileManager.default
+    var rows: [InfoRow] = []
+    rows.append(InfoRow(key: "名称", value: url.lastPathComponent))
+
     let attrs = try? fm.attributesOfItem(atPath: url.path)
     let size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
     let sizeText = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
-    let date = attrs?[.modificationDate] as? Date
-    let dateText = date.map { LocalFileInfoDateFormatter.string(from: $0) } ?? "—"
-    let ext = url.pathExtension.lowercased()
+    let created = attrs?[.creationDate] as? Date
+    let modified = attrs?[.modificationDate] as? Date
+    let ext = url.pathExtension.uppercased()
+    rows.append(InfoRow(key: "格式", value: ext.isEmpty ? "未知" : ext))
 
-    if ImportedImage.videoExtensions.contains(ext) {
+    if ImportedImage.videoExtensions.contains(url.pathExtension.lowercased()) {
         let asset = AVURLAsset(url: url)
         var seconds = 0.0
         if let duration = try? await asset.load(.duration) {
             seconds = CMTimeGetSeconds(duration)
         }
         let durationText = seconds.isFinite ? formattedDuration(seconds) : "—"
-        return LocalFileInfo(
-            name: url.lastPathComponent,
-            kindText: "视频 · \(durationText)",
-            sizeText: sizeText,
-            modifiedText: dateText
-        )
+        rows.append(InfoRow(key: "类型", value: "视频"))
+        rows.append(InfoRow(key: "时长", value: durationText))
+    } else {
+        rows.append(InfoRow(key: "类型", value: "图片"))
+        if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+            let w = props[kCGImagePropertyPixelWidth] as? Int ?? 0
+            let h = props[kCGImagePropertyPixelHeight] as? Int ?? 0
+            if w > 0 && h > 0 {
+                rows.append(InfoRow(key: "尺寸", value: "\(w) × \(h) 像素（约 \(Double(w * h) / 1_000_000.0, specifier: "%.1f") MP）"))
+                rows.append(InfoRow(key: "宽高比", value: String(format: "%.3f", Double(w) / Double(h))))
+            }
+            let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+            let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any]
+            let make = tiff?[kCGImagePropertyTIFFMake] as? String
+            let model = tiff?[kCGImagePropertyTIFFModel] as? String
+            if let make, !make.isEmpty, let model, !model.isEmpty {
+                rows.append(InfoRow(key: "设备型号", value: "\(make) \(model)"))
+            } else if let model, !model.isEmpty {
+                rows.append(InfoRow(key: "设备型号", value: model))
+            }
+            if let fnumber = exif?[kCGImagePropertyExifFNumber] as? NSNumber {
+                rows.append(InfoRow(key: "光圈", value: "f/\(fnumber.doubleValue, specifier: "%.1f")"))
+            }
+            if let expo = exif?[kCGImagePropertyExifExposureTime] as? NSNumber {
+                let t = expo.doubleValue
+                if t > 0 {
+                    rows.append(InfoRow(key: "快门", value: t >= 1 ? String(format: "1/%.0f 秒", 1.0 / t) : String(format: "%.1f 秒", t)))
+                }
+            }
+            if let isoList = exif?[kCGImagePropertyExifISOSpeedRatings] as? [NSNumber], let iso = isoList.first {
+                rows.append(InfoRow(key: "ISO", value: "\(iso.intValue)"))
+            }
+            if let focal = exif?[kCGImagePropertyExifFocalLength] as? NSNumber {
+                rows.append(InfoRow(key: "焦距", value: "\(focal.doubleValue, specifier: "%.0f") mm"))
+            }
+            if let bias = exif?[kCGImagePropertyExifExposureBiasValue] as? NSNumber {
+                rows.append(InfoRow(key: "曝光补偿", value: String(format: "%+.1f EV", bias.doubleValue)))
+            }
+            if let profile = props[kCGImagePropertyProfileName] as? String {
+                rows.append(InfoRow(key: "色彩配置", value: profile))
+            }
+        }
     }
 
-    if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-       let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-       let w = props[kCGImagePropertyPixelWidth] as? Int,
-       let h = props[kCGImagePropertyPixelHeight] as? Int {
-        return LocalFileInfo(
-            name: url.lastPathComponent,
-            kindText: "图片 · \(w) × \(h)",
-            sizeText: sizeText,
-            modifiedText: dateText
-        )
+    rows.append(InfoRow(key: "大小", value: sizeText))
+    if let created {
+        rows.append(InfoRow(key: "创建时间", value: LocalFileInfoDateFormatter.string(from: created)))
     }
-    return LocalFileInfo(
-        name: url.lastPathComponent,
-        kindText: "文件",
-        sizeText: sizeText,
-        modifiedText: dateText
-    )
+    if let modified {
+        rows.append(InfoRow(key: "修改时间", value: LocalFileInfoDateFormatter.string(from: modified)))
+    }
+    rows.append(InfoRow(key: "存储位置", value: url.deletingLastPathComponent().path))
+    return LocalFileInfo(rows: rows)
 }
 
 private let LocalFileInfoDateFormatter: DateFormatter = {
     let f = DateFormatter()
-    f.dateFormat = "yyyy-MM-dd HH:mm"
+    f.dateFormat = "yyyy-MM-dd HH:mm:ss"
     return f
 }()
 
 private func formattedDuration(_ seconds: Double) -> String {
     let s = Int(seconds.rounded())
-    return String(format: "%02d:%02d", s / 60, s % 60)
+    let h = s / 3600
+    let m = (s % 3600) / 60
+    let sec = s % 60
+    if h > 0 {
+        return String(format: "%d:%02d:%02d", h, m, sec)
+    }
+    return String(format: "%02d:%02d", m, sec)
 }
 
+/// 本地文件详情页（支持空态）
 struct LocalFileInfoView: View {
-    let info: LocalFileInfo
+    let info: LocalFileInfo?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            List {
-                LabeledContent("名称", value: info.name)
-                LabeledContent("类型", value: info.kindText)
-                LabeledContent("大小", value: info.sizeText)
-                LabeledContent("修改时间", value: info.modifiedText)
+            Group {
+                if let info, !info.rows.isEmpty {
+                    List {
+                        ForEach(info.rows) { row in
+                            LabeledContent(row.key, value: row.value)
+                        }
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("正在读取详情…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .navigationTitle("详情")
             .navigationBarTitleDisplayMode(.inline)
@@ -119,14 +172,25 @@ struct LocalFileInfoView: View {
 
 /// 相册资产详情（PHAsset）
 struct AssetInfoView: View {
-    let info: [String: String]
+    let info: [String: String]?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(info.keys.sorted(), id: \.self) { key in
-                    LabeledContent(key, value: info[key] ?? "—")
+            Group {
+                if let info, !info.isEmpty {
+                    List {
+                        ForEach(info.keys.sorted(), id: \.self) { key in
+                            LabeledContent(key, value: info[key] ?? "—")
+                        }
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("正在读取详情…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .navigationTitle("详情")

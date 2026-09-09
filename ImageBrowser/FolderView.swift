@@ -88,18 +88,14 @@ struct MountedFoldersView: View {
                     .accessibilityLabel("挂载文件夹")
                 }
             }
-            .fileImporter(
-                isPresented: $showImporter,
-                allowedContentTypes: [.folder],
-                allowsMultipleSelection: true
-            ) { result in
-                switch result {
-                case .success(let urls):
+            .sheet(isPresented: $showImporter) {
+                DocumentPicker(
+                    contentTypes: [.folder],
+                    allowsMultipleSelection: true
+                ) { urls in
                     for url in urls {
                         vm.mount(url: url)
                     }
-                case .failure:
-                    break
                 }
             }
             .navigationDestination(for: MountedFolder.self) { folder in

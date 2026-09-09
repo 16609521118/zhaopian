@@ -19,6 +19,8 @@
 		CD000000000000000000000E /* FolderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000000000000000000000C /* FolderViewModel.swift */; };
 		CD000000000000000000000F /* FolderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000000000000000000000D /* FolderView.swift */; };
 		CD0000000000000000000010 /* LocalServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000000000000000000000E /* LocalServer.swift */; };
+		CD0000000000000000000011 /* DocumentPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000000000000000000000F /* DocumentPicker.swift */; };
+		CD0000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000010 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +37,8 @@
 		AB000000000000000000000C /* FolderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderViewModel.swift; sourceTree = "<group>"; };
 		AB000000000000000000000D /* FolderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderView.swift; sourceTree = "<group>"; };
 		AB000000000000000000000E /* LocalServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServer.swift; sourceTree = "<group>"; };
+		AB000000000000000000000F /* DocumentPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPicker.swift; sourceTree = "<group>"; };
+		AB0000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB000000000000000000000B /* ImageBrowser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImageBrowser.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -72,6 +76,8 @@
 				AB000000000000000000000C /* FolderViewModel.swift */,
 				AB000000000000000000000D /* FolderView.swift */,
 				AB000000000000000000000E /* LocalServer.swift */,
+				AB000000000000000000000F /* DocumentPicker.swift */,
+				AB0000000000000000000010 /* Assets.xcassets */,
 				AB000000000000000000000A /* Info.plist */,
 			);
 			path = ImageBrowser;
@@ -143,6 +149,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CD0000000000000000000012 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -165,6 +172,7 @@
 				CD000000000000000000000E /* FolderViewModel.swift in Sources */,
 				CD000000000000000000000F /* FolderView.swift in Sources */,
 				CD0000000000000000000010 /* LocalServer.swift in Sources */,
+				CD0000000000000000000011 /* DocumentPicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -301,6 +309,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.ImageBrowser;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -322,6 +331,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.ImageBrowser;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
