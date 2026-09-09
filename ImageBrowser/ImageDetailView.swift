@@ -3,6 +3,7 @@ import Photos
 import UIKit
 import AVFoundation
 import CoreLocation
+import ImageIO
 
 /// 全屏查看页：左右滑动翻页，支持详情与分享
 struct ImageDetailView: View {
@@ -75,17 +76,18 @@ struct ImageDetailView: View {
             guard vm.assets.indices.contains(currentIndex) else { return }
             let asset = vm.assets[currentIndex]
             currentImage = await vm.requestFullImage(for: asset)
-            assetInfo = await Self.info(for: asset)
+            // 秒开：先展示同步可得的字段
+            var info = Self.basicInfo(for: asset)
+            assetInfo = info
+            // 后台异步补齐：大小 / 拍摄设备 / 中文位置
+            let extra = await Self.extraInfo(for: asset)
+            info.merge(extra) { _, new in new }
+            assetInfo = info
         }
     }
 
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        return f
-    }()
-
-    private static func info(for asset: PHAsset) async -> [String: String] {
+    /// 同步字段（打开详情立即显示，秒开）
+    private static func basicInfo(for asset: PHAsset) -> [String: String] {
         var info: [String: String] = [:]
         let resources = PHAssetResource.assetResources(for: asset)
         info["文件名"] = resources.first?.originalFilename ?? "未知"
@@ -94,7 +96,6 @@ struct ImageDetailView: View {
         if asset.mediaType == .video {
             info["时长"] = Self.durationText(asset.duration)
         }
-        info["大小"] = await assetFileSizeText(for: asset)
         if let date = asset.creationDate {
             info["拍摄时间"] = dateFormatter.string(from: date)
         }
@@ -102,14 +103,27 @@ struct ImageDetailView: View {
         if let album = collections.firstObject?.localizedTitle {
             info["所在相册"] = album
         }
-        if let loc = asset.location {
-            info["拍摄位置"] = String(format: "%.6f, %.6f", loc.coordinate.latitude, loc.coordinate.longitude)
-        }
-        if let first = resources.first {
-            info["资源类型"] = Self.resourceTypeName(first.type)
-        }
         return info
     }
+
+    /// 异步字段（后台加载，完成一项刷新一项）
+    private static func extraInfo(for asset: PHAsset) async -> [String: String] {
+        var extra: [String: String] = [:]
+        extra["大小"] = await assetFileSizeText(for: asset)
+        if let loc = asset.location {
+            extra["拍摄位置"] = await PlaceNameResolver.shared.resolve(loc)
+        }
+        if let model = await cameraModel(for: asset) {
+            extra["拍摄设备"] = model
+        }
+        return extra
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
 
     private static func durationText(_ seconds: TimeInterval) -> String {
         let s = Int(seconds.rounded())
@@ -122,19 +136,33 @@ struct ImageDetailView: View {
         return String(format: "%02d:%02d", m, sec)
     }
 
-    private static func resourceTypeName(_ type: PHAssetResourceType) -> String {
-        switch type {
-        case .photo: return "照片"
-        case .video: return "视频"
-        case .audio: return "音频"
-        case .alternatePhoto: return "备用照片"
-        case .fullSizePhoto: return "原始照片"
-        case .fullSizeVideo: return "原始视频"
-        case .adjustmentData: return "调整数据"
-        case .adjustmentBasePhoto: return "调整基准照片"
-        case .pairedVideo: return "配套视频"
-        default: return "其他"
+    /// 拍摄设备（Exif Make + Model，仅图片）
+    private static func cameraModel(for asset: PHAsset) async -> String? {
+        guard asset.mediaType == .image else { return nil }
+        let options = PHImageRequestOptions()
+        options.isNetworkAccessAllowed = false
+        options.deliveryMode = .fastFormat
+        let data = await withCheckedContinuation { continuation in
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, _, _, _ in
+                continuation.resume(returning: data)
+            }
         }
+        guard let data,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        else {
+            return nil
+        }
+        let make = tiff[kCGImagePropertyTIFFMake] as? String
+        let model = tiff[kCGImagePropertyTIFFModel] as? String
+        if let make, !make.isEmpty {
+            if let model, !model.isEmpty {
+                return "\(make) \(model)"
+            }
+            return make
+        }
+        return model
     }
 
     /// 通过 PHImageManager 请求资源数据以获取文件大小（PHAssetResource 不暴露大小）
@@ -165,6 +193,34 @@ struct ImageDetailView: View {
 
     private static func sizeText(_ bytes: Int) -> String {
         bytes > 0 ? ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file) : "—"
+    }
+}
+
+/// 反地理编码（坐标 → 中文地名）结果缓存，避免重复请求网络
+private actor PlaceNameResolver {
+    static let shared = PlaceNameResolver()
+
+    private var cache: [String: String] = [:]
+
+    func resolve(_ loc: CLLocation) async -> String {
+        let key = String(format: "%.4f,%.4f", loc.coordinate.latitude, loc.coordinate.longitude)
+        if let hit = cache[key] {
+            return hit
+        }
+        var name = String(format: "%.6f, %.6f", loc.coordinate.latitude, loc.coordinate.longitude)
+        let geocoder = CLGeocoder()
+        let places = try? await geocoder.reverseGeocodeLocation(loc)
+        if let place = places?.first {
+            let parts = [place.administrativeArea, place.locality, place.subLocality, place.name]
+                .compactMap { $0 }
+            if !parts.isEmpty {
+                name = parts.joined(separator: " ")
+            } else if let country = place.country {
+                name = country
+            }
+        }
+        cache[key] = name
+        return name
     }
 }
 

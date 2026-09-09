@@ -15,7 +15,6 @@ struct FolderItem: Identifiable {
 /// “文件夹”页：挂载管理 + 目录浏览（正规的本地文件夹映射，非复制）
 struct MountedFoldersView: View {
     @EnvironmentObject private var vm: FolderViewModel
-    @State private var showImporter = false
 
     var body: some View {
         NavigationStack {
@@ -81,21 +80,18 @@ struct MountedFoldersView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        showImporter = true
+                        DocumentPickerPresenter.shared.present(
+                            contentTypes: [.folder],
+                            allowsMultipleSelection: true
+                        ) { urls in
+                            for url in urls {
+                                vm.mount(url: url)
+                            }
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("挂载文件夹")
-                }
-            }
-            .sheet(isPresented: $showImporter) {
-                DocumentPicker(
-                    contentTypes: [.folder],
-                    allowsMultipleSelection: true
-                ) { urls in
-                    for url in urls {
-                        vm.mount(url: url)
-                    }
                 }
             }
             .navigationDestination(for: MountedFolder.self) { folder in

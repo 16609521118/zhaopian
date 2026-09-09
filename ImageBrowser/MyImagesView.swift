@@ -22,7 +22,6 @@ struct PlaybackSelection: Identifiable {
 /// “我的图片”页：从文件夹（文件选择器）导入图片/视频到 App 沙盒内浏览管理
 struct MyImagesView: View {
     @State private var images: [ImportedImage] = []
-    @State private var showImporter = false
     @State private var viewerSelection: ViewerSelection?
     @State private var playbackSelection: PlaybackSelection?
 
@@ -85,19 +84,16 @@ struct MyImagesView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        showImporter = true
+                        DocumentPickerPresenter.shared.present(
+                            contentTypes: [.image, .movie],
+                            allowsMultipleSelection: true
+                        ) { urls in
+                            Task { await importItems(urls) }
+                        }
                     } label: {
                         Image(systemName: "folder.badge.plus")
                     }
                     .accessibilityLabel("从文件夹导入")
-                }
-            }
-            .sheet(isPresented: $showImporter) {
-                DocumentPicker(
-                    contentTypes: [.image, .movie],
-                    allowsMultipleSelection: true
-                ) { urls in
-                    Task { await importItems(urls) }
                 }
             }
             .task {
