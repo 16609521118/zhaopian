@@ -61,7 +61,7 @@ final class FolderViewModel: ObservableObject {
             var stale = false
             guard let url = try? URL(
                 resolvingBookmarkData: saved.bookmarkData,
-                options: .withSecurityScope,
+                options: [],
                 relativeTo: nil,
                 bookmarkDataIsStale: &stale
             ) else { return nil }

@@ -72,7 +72,8 @@ func makeLocalFileInfo(url: URL) async -> LocalFileInfo {
     let ext = url.pathExtension.uppercased()
     rows.append(InfoRow(key: "格式", value: ext.isEmpty ? "未知" : ext))
 
-    if ImportedImage.videoExtensions.contains(url.pathExtension.lowercased()) {
+    let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "3gp"]
+    if videoExtensions.contains(url.pathExtension.lowercased()) {
         let asset = AVURLAsset(url: url)
         var seconds = 0.0
         if let duration = try? await asset.load(.duration) {
