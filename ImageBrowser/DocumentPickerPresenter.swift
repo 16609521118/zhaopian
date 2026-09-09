@@ -20,9 +20,11 @@ final class DocumentPickerPresenter: NSObject, UIDocumentPickerDelegate {
     ) {
         self.onPick = onPick
         self.onCancel = onCancel
+        // 使用经典创建方式（documentTypes + in:），规避 iOS 26 上新 API 选择器确认回调失效的问题
+        let typeStrings = contentTypes.map { $0.identifier }
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: contentTypes,
-            asCopy: false
+            documentTypes: typeStrings,
+            in: .open
         )
         picker.allowsMultipleSelection = allowsMultipleSelection
         picker.delegate = self

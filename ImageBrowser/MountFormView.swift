@@ -85,6 +85,7 @@ struct MountFormView: View {
                             if name.trimmingCharacters(in: .whitespaces).isEmpty {
                                 name = url.lastPathComponent
                             }
+                            showToast("已选择：" + url.lastPathComponent)
                         } onCancel: {
                             showPicker = false
                         }
