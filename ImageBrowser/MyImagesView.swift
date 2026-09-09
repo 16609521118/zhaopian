@@ -135,6 +135,9 @@ struct MyImagesView: View {
             .task {
                 reload()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .myImagesDidChange)) { _ in
+                reload()
+            }
             .overlay(alignment: .top) {
                 if let toast {
                     ToastView(text: toast)

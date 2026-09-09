@@ -37,12 +37,17 @@ struct LibraryView: View {
                     }
                 }
             }
-            .navigationTitle("相册")
+            .navigationTitle(vm.albumTitle)
             .navigationDestination(for: Int.self) { index in
                 ImageDetailView(startIndex: index)
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    if vm.albumTitle != "全部照片" {
+                        Button("全部") {
+                            vm.setAlbum(nil)
+                        }
+                    }
                     Button {
                         vm.refreshAuthorization()
                     } label: {

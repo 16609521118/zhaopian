@@ -16,37 +16,52 @@ struct FolderItem: Identifiable {
 struct MountedFoldersView: View {
     @EnvironmentObject private var vm: FolderViewModel
     @EnvironmentObject private var tabRouter: TabRouter
+    @EnvironmentObject private var libraryVM: LibraryViewModel
     @State private var toast: String?
     @State private var showFolderImporter = false
+    @State private var albums: [LibraryViewModel.AlbumInfo] = []
 
     var body: some View {
         NavigationStack {
-            Group {
-                if vm.folders.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "externaldrive.badge.plus")
-                            .font(.system(size: 44))
+            List {
+                Section("系统相簿（照片 App 里的文件夹）") {
+                    if albums.isEmpty {
+                        Text("在系统「照片」App 新建相簿，把照片放进去\n这里就会出现该相簿，点击即可浏览")
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
-                        Text("还没有挂载文件夹")
-                            .font(.headline)
-                        Text("方式一（推荐，不弹选择器）：\n系统「文件」App → 我的 iPhone → 图览\n把整个文件夹放进来，回到本页即可浏览\n\n方式二：\n点右上角 + ，浏览页选中文件夹后点「打开」\n（挂载后文件不会复制，直接读取原位置）")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                } else {
-                    List {
-                        Section {
-                            NavigationLink(value: "local-server") {
-                                Label("局域网映射（IP 访问）", systemImage: "network")
+                    } else {
+                        ForEach(albums) { album in
+                            Button {
+                                libraryVM.setAlbum(album.collection)
+                                tabRouter.selection = 0
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                        .font(.title2)
+                                        .foregroundStyle(.tint)
+                                    Text(album.title)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
                             }
-                        } header: {
-                            Text("映射方式")
-                        } footer: {
-                            Text("App 内启动局域网服务，电脑浏览器访问地址即可向“我的图片”上传 / 下载文件")
                         }
+                    }
+                }
 
-                        Section("已挂载文件夹") {
+                Section {
+                    NavigationLink(value: "local-server") {
+                        Label("局域网映射（IP 访问）", systemImage: "network")
+                    }
+                } header: {
+                    Text("映射方式")
+                } footer: {
+                    Text("App 内启动局域网服务，电脑浏览器访问地址即可向“我的图片”上传 / 下载文件")
+                }
+
+                Section("已挂载文件夹") {
                             ForEach(vm.folders) { folder in
                                 NavigationLink(value: FolderBrowserView.FolderRoot(url: folder.url, displayName: folder.displayName, isScoped: true)) {
                                     HStack(spacing: 12) {
@@ -100,12 +115,17 @@ struct MountedFoldersView: View {
                                 }
                             }
                         }
-                    }
-                }
             }
             .navigationTitle("文件夹")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button {
+                        albums = libraryVM.fetchAlbums()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .accessibilityLabel("刷新相簿")
+
                     Button {
                         showFolderImporter = true
                     } label: {
@@ -143,6 +163,9 @@ struct MountedFoldersView: View {
             .animation(.easeInOut(duration: 0.25), value: toast)
             .navigationDestination(for: FolderBrowserView.FolderRoot.self) { root in
                 FolderBrowserView(root: root)
+            }
+            .task {
+                albums = libraryVM.fetchAlbums()
             }
             .navigationDestination(for: String.self) { value in
                 if value == "local-server" {
