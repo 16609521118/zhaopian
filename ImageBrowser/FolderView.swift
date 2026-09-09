@@ -15,6 +15,7 @@ struct FolderItem: Identifiable {
 /// “文件夹”页：挂载管理 + 目录浏览（正规的本地文件夹映射，非复制）
 struct MountedFoldersView: View {
     @EnvironmentObject private var vm: FolderViewModel
+    @State private var toast: String?
 
     var body: some View {
         NavigationStack {
@@ -84,8 +85,14 @@ struct MountedFoldersView: View {
                             contentTypes: [.folder],
                             allowsMultipleSelection: true
                         ) { urls in
+                            var ok = 0
                             for url in urls {
-                                vm.mount(url: url)
+                                if vm.mount(url: url) { ok += 1 }
+                            }
+                            if ok > 0 {
+                                showToast(ok > 1 ? "已挂载 \(ok) 个文件夹" : "已挂载 1 个文件夹")
+                            } else {
+                                showToast("挂载失败，请重试")
                             }
                         }
                     } label: {
@@ -94,6 +101,12 @@ struct MountedFoldersView: View {
                     .accessibilityLabel("挂载文件夹")
                 }
             }
+            .overlay(alignment: .top) {
+                if let toast {
+                    ToastView(text: toast)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: toast)
             .navigationDestination(for: MountedFolder.self) { folder in
                 FolderBrowserView(folder: folder)
             }
@@ -101,6 +114,15 @@ struct MountedFoldersView: View {
                 if value == "local-server" {
                     LocalServerView()
                 }
+            }
+        }
+    }
+
+    private func showToast(_ message: String) {
+        withAnimation { toast = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation {
+                if toast == message { toast = nil }
             }
         }
     }

@@ -4,6 +4,23 @@ import AVFoundation
 import AVKit
 import ImageIO
 
+// MARK: - 顶部轻提示
+
+struct ToastView: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.black.opacity(0.75), in: Capsule())
+            .foregroundStyle(.white)
+            .padding(.top, 6)
+            .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}
+
 /// 相册权限被拒绝时的引导视图
 struct PermissionView: View {
     var body: some View {

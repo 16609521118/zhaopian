@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
+import PhotosUI
 
 struct ImportedImage: Identifiable {
     let url: URL
@@ -19,11 +20,13 @@ struct PlaybackSelection: Identifiable {
     let index: Int
 }
 
-/// “我的图片”页：从文件夹（文件选择器）导入图片/视频到 App 沙盒内浏览管理
+/// “我的图片”页：从文件夹（文件选择器）或相册导入图片/视频到 App 沙盒内浏览管理
 struct MyImagesView: View {
     @State private var images: [ImportedImage] = []
     @State private var viewerSelection: ViewerSelection?
     @State private var playbackSelection: PlaybackSelection?
+    @State private var toast: String?
+    @State private var photosPickerItems: [PhotosPickerItem] = []
 
     private let columns = [
         GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 4)
@@ -44,7 +47,7 @@ struct MyImagesView: View {
                             .foregroundStyle(.secondary)
                         Text("还没有图片")
                             .font(.headline)
-                        Text("点击右上角从文件夹导入图片或视频\n文件会复制保存到本应用内")
+                        Text("点击右上角从文件夹或相册导入图片或视频\n文件会复制保存到本应用内")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -82,13 +85,22 @@ struct MyImagesView: View {
             }
             .navigationTitle("我的图片")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    PhotosPicker(
+                        selection: $photosPickerItems,
+                        maxSelectionCount: 20,
+                        matching: .any(of: [.images, .videos])
+                    ) {
+                        Image(systemName: "photo.badge.plus")
+                    }
+                    .accessibilityLabel("从相册导入")
+
                     Button {
                         DocumentPickerPresenter.shared.present(
                             contentTypes: [.image, .movie],
                             allowsMultipleSelection: true
                         ) { urls in
-                            Task { await importItems(urls) }
+                            importItems(urls)
                         }
                     } label: {
                         Image(systemName: "folder.badge.plus")
@@ -96,9 +108,21 @@ struct MyImagesView: View {
                     .accessibilityLabel("从文件夹导入")
                 }
             }
+            .onChange(of: photosPickerItems) { items in
+                guard !items.isEmpty else { return }
+                let picked = items
+                photosPickerItems = []
+                Task { await importPhotos(picked) }
+            }
             .task {
                 reload()
             }
+            .overlay(alignment: .top) {
+                if let toast {
+                    ToastView(text: toast)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: toast)
             .sheet(item: $viewerSelection) { selection in
                 LocalImageViewer(images: images, startIndex: selection.index)
             }
@@ -110,16 +134,20 @@ struct MyImagesView: View {
 
     // MARK: - 导入（从文件夹复制到沙盒）
 
-    private func importItems(_ urls: [URL]) async {
+    private func importItems(_ urls: [URL]) {
         let fm = FileManager.default
-        try? fm.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
-
+        do {
+            try fm.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
+        } catch {
+            showToast("无法创建导入目录")
+            return
+        }
+        var imported = 0
+        var failed: [String] = []
         for url in urls {
             let opened = url.startAccessingSecurityScopedResource()
             defer {
-                if opened {
-                    url.stopAccessingSecurityScopedResource()
-                }
+                if opened { url.stopAccessingSecurityScopedResource() }
             }
             let base = url.lastPathComponent
             var name = base
@@ -128,11 +156,55 @@ struct MyImagesView: View {
             }
             do {
                 try fm.copyItem(at: url, to: imagesDirectory.appendingPathComponent(name))
+                imported += 1
             } catch {
-                continue
+                failed.append(base)
             }
         }
         reload()
+        if imported > 0 {
+            showToast("已导入 \(imported) 个文件")
+        }
+        if !failed.isEmpty {
+            showToast("导入失败：\(failed.joined(separator: "、"))")
+        }
+    }
+
+    // MARK: - 导入（从系统相册）
+
+    private func importPhotos(_ items: [PhotosPickerItem]) async {
+        var imported = 0
+        var failed = 0
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                failed += 1
+                continue
+            }
+            let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
+            let name = "\(UUID().uuidString.prefix(8)).\(ext)"
+            do {
+                try data.write(to: imagesDirectory.appendingPathComponent(name))
+                imported += 1
+            } catch {
+                failed += 1
+            }
+        }
+        reload()
+        if imported > 0 {
+            showToast("已导入 \(imported) 个文件")
+        }
+        if failed > 0 {
+            showToast("\(failed) 个文件导入失败")
+        }
+    }
+
+    private func showToast(_ message: String) {
+        withAnimation { toast = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation {
+                if toast == message { toast = nil }
+            }
+        }
     }
 
     // MARK: - 本地文件管理

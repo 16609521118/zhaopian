@@ -23,7 +23,8 @@ final class FolderViewModel: ObservableObject {
 
     // MARK: - 挂载
 
-    func mount(url: URL) {
+    @discardableResult
+    func mount(url: URL) -> Bool {
         let opened = url.startAccessingSecurityScopedResource()
         defer {
             if opened {
@@ -41,9 +42,10 @@ final class FolderViewModel: ObservableObject {
             bookmarks[url.path] = data
             saveBookmarks(bookmarks)
         } catch {
-            return
+            return false
         }
         refreshFolders()
+        return true
     }
 
     func unmount(_ folder: MountedFolder) {

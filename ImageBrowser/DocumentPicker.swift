@@ -2,11 +2,14 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
-/// 系统文档选择器（全局 presenter 模式）
+/// 系统文档选择器（全局 presenter，加固版）
 ///
-/// 直接通过 UIDocumentPickerViewController 从最上层控制器 present，
-/// 不依赖 SwiftUI .sheet 的生命周期 —— 在 TabView + NavigationStack 中
-/// 也能保证 delegate 回调（didPickDocumentsAt）一定触发，选完即回调。
+/// 可靠性设计：
+/// 1. 从最上层视图控制器 present，不依赖 SwiftUI sheet 生命周期；
+/// 2. 查找 topViewController 带多级 fallback（激活状态、key window）；
+/// 3. present 推迟到主队列下一拍执行，避开手势/动画时序；
+/// 4. 重复调用先清理旧 picker，绝不静默吞掉点击；
+/// 5. didPickDocumentsAt 同步回调（security scope 在回调内最可靠）。
 final class DocumentPickerPresenter: NSObject, UIDocumentPickerDelegate {
     static let shared = DocumentPickerPresenter()
 
@@ -18,17 +21,25 @@ final class DocumentPickerPresenter: NSObject, UIDocumentPickerDelegate {
     }
 
     func present(contentTypes: [UTType], allowsMultipleSelection: Bool, onPick: @escaping ([URL]) -> Void) {
-        guard picker == nil else { return } // 防止重复弹出
+        // 清理可能残留的旧选择器，避免点击被静默丢弃
+        if let old = picker {
+            old.dismiss(animated: false)
+        }
+        picker = nil
         self.onPick = onPick
+
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: contentTypes)
         picker.allowsMultipleSelection = allowsMultipleSelection
         picker.delegate = self
         self.picker = picker
-        if let top = Self.topViewController() {
-            top.present(picker, animated: true)
-        } else {
+
+        guard let top = Self.topViewController() else {
             self.onPick = nil
             self.picker = nil
+            return
+        }
+        DispatchQueue.main.async {
+            top.present(picker, animated: true)
         }
     }
 
@@ -44,16 +55,15 @@ final class DocumentPickerPresenter: NSObject, UIDocumentPickerDelegate {
         picker = nil
     }
 
-    /// 找到当前最上层的视图控制器（处理多层 presented）
+    /// 找到当前最上层的视图控制器（多级 fallback）
     private static func topViewController() -> UIViewController? {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }
-        guard let root = scene?.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        guard let window = scene?.windows.first(where: { $0.isKeyWindow }) ?? scene?.windows.first else {
             return nil
         }
-        var top = root
-        while let presented = top.presentedViewController {
+        var top = window.rootViewController
+        while let presented = top?.presentedViewController {
             top = presented
         }
         return top
