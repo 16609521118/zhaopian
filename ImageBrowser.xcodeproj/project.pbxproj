@@ -150,7 +150,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				CD0000000000000000000012 /* Assets.xcassets in Resources */,
-				CD0000000000000000000014 /* DocumentPickerPresenter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -173,6 +172,7 @@
 				CD000000000000000000000E /* FolderViewModel.swift in Sources */,
 				CD000000000000000000000F /* FolderView.swift in Sources */,
 				CD0000000000000000000010 /* LocalServer.swift in Sources */,
+				CD0000000000000000000014 /* DocumentPickerPresenter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
