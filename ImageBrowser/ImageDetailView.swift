@@ -1,6 +1,7 @@
 import SwiftUI
 import Photos
 import UIKit
+import AVFoundation
 
 /// 全屏查看页：左右滑动翻页，支持详情与分享
 struct ImageDetailView: View {
@@ -73,7 +74,7 @@ struct ImageDetailView: View {
             guard vm.assets.indices.contains(currentIndex) else { return }
             let asset = vm.assets[currentIndex]
             currentImage = await vm.requestFullImage(for: asset)
-            assetInfo = Self.info(for: asset)
+            assetInfo = await Self.info(for: asset)
         }
     }
 
@@ -83,7 +84,7 @@ struct ImageDetailView: View {
         return f
     }()
 
-    private static func info(for asset: PHAsset) -> [String: String] {
+    private static func info(for asset: PHAsset) async -> [String: String] {
         var info: [String: String] = [:]
         let resources = PHAssetResource.assetResources(for: asset)
         info["文件名"] = resources.first?.originalFilename ?? "未知"
@@ -91,15 +92,39 @@ struct ImageDetailView: View {
             info["拍摄时间"] = dateFormatter.string(from: date)
         }
         info["尺寸"] = "\(asset.pixelWidth) × \(asset.pixelHeight)"
-        var sizeText = "—"
-        if let url = resources.first?.fileURL,
-           let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-           let s = attrs[.size] as? NSNumber {
-            sizeText = ByteCountFormatter.string(fromByteCount: s.int64Value, countStyle: .file)
-        }
-        info["大小"] = sizeText
+        info["大小"] = await assetFileSizeText(for: asset)
         info["类型"] = asset.mediaType == .video ? "视频" : "图片"
         return info
+    }
+
+    /// 通过 PHImageManager 请求资源数据以获取文件大小（PHAssetResource 不暴露大小）
+    private static func assetFileSizeText(for asset: PHAsset) async -> String {
+        if asset.mediaType == .video {
+            let options = PHVideoRequestOptions()
+            options.isNetworkAccessAllowed = true
+            return await withCheckedContinuation { continuation in
+                PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+                    var bytes = 0
+                    if let urlAsset = avAsset as? AVURLAsset {
+                        let attrs = try? FileManager.default.attributesOfItem(atPath: urlAsset.url.path)
+                        bytes = (attrs?[.size] as? NSNumber)?.intValue ?? 0
+                    }
+                    continuation.resume(returning: Self.sizeText(bytes))
+                }
+            }
+        } else {
+            let options = PHImageRequestOptions()
+            options.isNetworkAccessAllowed = true
+            return await withCheckedContinuation { continuation in
+                PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, _, _, _ in
+                    continuation.resume(returning: Self.sizeText(data?.count ?? 0))
+                }
+            }
+        }
+    }
+
+    private static func sizeText(_ bytes: Int) -> String {
+        bytes > 0 ? ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file) : "—"
     }
 }
 
