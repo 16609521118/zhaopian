@@ -40,6 +40,8 @@
 	<true/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
+	<key>NSDocumentsUsageDescription</key>
+	<string>挂载文件夹后，本应用需要访问您选择的文件夹，以浏览其中的图片。</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>启动局域网映射服务需要访问本地网络，以便电脑通过局域网地址访问本应用内的文件。</string>
 	<key>NSPhotoLibraryUsageDescription</key>

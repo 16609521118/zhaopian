@@ -28,7 +28,7 @@ struct MyImagesView: View {
     @State private var playbackSelection: PlaybackSelection?
     @State private var toast: String?
     @State private var photosPickerItems: [PhotosPickerItem] = []
-    @State private var showFileImporter = false
+    @State private var showFilePicker = false
 
     private let columns = [
         GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 4)
@@ -106,25 +106,25 @@ struct MyImagesView: View {
                     .accessibilityLabel("从相册导入")
 
                     Button {
-                        showFileImporter = true
+                        showFilePicker = true
                     } label: {
                         Image(systemName: "folder.badge.plus")
                     }
                     .accessibilityLabel("从文件夹导入")
                 }
             }
-            .fileImporter(
-                isPresented: $showFileImporter,
-                allowedContentTypes: [.image, .movie],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
+            .sheet(isPresented: $showFilePicker) {
+                UIKitDocumentPicker(
+                    contentTypes: [.image, .movie],
+                    allowsMultipleSelection: false
+                ) { urls in
+                    showFilePicker = false
                     importItems(urls)
-                case .failure:
+                    tabRouter.selection = 1
+                } onCancel: {
+                    showFilePicker = false
                     showToast("未选择文件")
                 }
-                tabRouter.selection = 1
             }
             .onChange(of: photosPickerItems) { items in
                 guard !items.isEmpty else { return }

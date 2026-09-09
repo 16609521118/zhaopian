@@ -18,7 +18,8 @@ struct MountedFoldersView: View {
     @EnvironmentObject private var tabRouter: TabRouter
     @EnvironmentObject private var libraryVM: LibraryViewModel
     @State private var toast: String?
-    @State private var showFolderImporter = false
+    @State private var showMountGuide = false
+    @State private var showFolderPicker = false
     @State private var albums: [LibraryViewModel.AlbumInfo] = []
 
     var body: some View {
@@ -127,33 +128,38 @@ struct MountedFoldersView: View {
                     .accessibilityLabel("刷新相簿")
 
                     Button {
-                        showFolderImporter = true
+                        showMountGuide = true
                     } label: {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("挂载文件夹")
                 }
             }
-            .fileImporter(
-                isPresented: $showFolderImporter,
-                allowedContentTypes: [.folder],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
-                    if let url = urls.first {
-                        if let err = vm.mount(url: url) {
-                            showToast("挂载失败：\(err)")
-                        } else {
-                            showToast("已挂载 1 个文件夹")
-                        }
-                    } else {
+            .alert("如何挂载文件夹", isPresented: $showMountGuide) {
+                Button("开始选择文件夹") { showFolderPicker = true }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("将打开系统文件夹选择器：\n① 进入你要挂载的文件夹\n② 点右上角蓝色按钮（显示「打开」或「完成」）\n③ 返回后自动挂载并列出内容")
+            }
+            .sheet(isPresented: $showFolderPicker) {
+                UIKitDocumentPicker(
+                    contentTypes: [.folder],
+                    allowsMultipleSelection: false
+                ) { urls in
+                    showFolderPicker = false
+                    guard let url = urls.first else {
                         showToast("未选择文件夹")
+                        return
                     }
-                case .failure:
-                    showToast("未选择文件夹")
+                    if let err = vm.mount(url: url) {
+                        showToast("挂载失败：\(err)")
+                    } else {
+                        showToast("已挂载：\(url.lastPathComponent)")
+                    }
+                    tabRouter.selection = 2
+                } onCancel: {
+                    showFolderPicker = false
                 }
-                tabRouter.selection = 2
             }
             .overlay(alignment: .top) {
                 if let toast {
