@@ -91,7 +91,7 @@ struct ImageDetailView: View {
             info["拍摄时间"] = dateFormatter.string(from: date)
         }
         info["尺寸"] = "\(asset.pixelWidth) × \(asset.pixelHeight)"
-        let size = resources.first?.fileSize ?? 0
+        let size = resources.first?.size ?? 0
         info["大小"] = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
         info["类型"] = asset.mediaType == .video ? "视频" : "图片"
         return info
