@@ -29,7 +29,7 @@ struct MountedFoldersView: View {
                             .foregroundStyle(.secondary)
                         Text("还没有挂载文件夹")
                             .font(.headline)
-                        Text("挂载方式：\n① 点右上角 + ，在文件选择器切到「浏览」\n② 找到要挂载的文件夹，点它一下（选中）\n③ 点右上角「打开」，即可在此浏览其中图片\n\n提示：挂载后文件不会复制，直接读取原位置")
+                        Text("方式一（推荐，不弹选择器）：\n系统「文件」App → 我的 iPhone → 图览\n把整个文件夹放进来，回到本页即可浏览\n\n方式二：\n点右上角 + ，浏览页选中文件夹后点「打开」\n（挂载后文件不会复制，直接读取原位置）")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -48,7 +48,7 @@ struct MountedFoldersView: View {
 
                         Section("已挂载文件夹") {
                             ForEach(vm.folders) { folder in
-                                NavigationLink(value: folder) {
+                                NavigationLink(value: FolderBrowserView.FolderRoot(url: folder.url, displayName: folder.displayName, isScoped: true)) {
                                     HStack(spacing: 12) {
                                         Image(systemName: "folder.fill")
                                             .font(.title2)
@@ -72,6 +72,31 @@ struct MountedFoldersView: View {
                                         vm.unmount(folder)
                                     } label: {
                                         Label("卸载", systemImage: "eject")
+                                    }
+                                }
+                            }
+                        }
+
+                        Section("App 内文件夹（从「文件」App 放入）") {
+                            if sandboxFolders.isEmpty {
+                                Text("用系统「文件」App 把整个文件夹放进
+「我的 iPhone → 图览」，回到本页即可浏览")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(sandboxFolders, id: \.path) { url in
+                                    NavigationLink(value: FolderBrowserView.FolderRoot(url: url, displayName: url.lastPathComponent, isScoped: false)) {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "folder.fill")
+                                                .font(.title2)
+                                                .foregroundStyle(.tint)
+                                            Text(url.lastPathComponent)
+                                                .foregroundStyle(.primary)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption)
+                                                .foregroundStyle(.tertiary)
+                                        }
                                     }
                                 }
                             }
@@ -117,14 +142,27 @@ struct MountedFoldersView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: toast)
-            .navigationDestination(for: MountedFolder.self) { folder in
-                FolderBrowserView(folder: folder)
+            .navigationDestination(for: FolderBrowserView.FolderRoot.self) { root in
+                FolderBrowserView(root: root)
             }
             .navigationDestination(for: String.self) { value in
                 if value == "local-server" {
                     LocalServerView()
                 }
             }
+        }
+    }
+
+    /// Documents 沙盒内的文件夹（用户通过系统「文件」App 放入）
+    private var sandboxFolders: [URL] {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        guard let items = try? FileManager.default.contentsOfDirectory(
+            at: docs,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+        return items.filter {
+            (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         }
     }
 
@@ -140,7 +178,15 @@ struct MountedFoldersView: View {
 
 /// 文件夹浏览：支持进入子目录、返回上级，图片/视频网格 + 全屏查看
 struct FolderBrowserView: View {
-    let folder: MountedFolder
+    /// 浏览根目录：挂载的文件夹（isScoped = 需要安全作用域）或 App 沙盒内目录
+    struct FolderRoot: Hashable, Identifiable {
+        let url: URL
+        let displayName: String
+        let isScoped: Bool
+        var id: String { url.path }
+    }
+
+    let root: FolderRoot
     @State private var path: [URL] = []
     @State private var items: [FolderItem] = []
     @State private var viewerSelection: ViewerSelection?
@@ -150,7 +196,7 @@ struct FolderBrowserView: View {
         GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 4)
     ]
 
-    private var currentURL: URL { path.last ?? folder.url }
+    private var currentURL: URL { path.last ?? root.url }
 
     private var currentImageList: [ImportedImage] {
         items
@@ -218,7 +264,7 @@ struct FolderBrowserView: View {
                 }
             }
         }
-        .navigationTitle(currentURL.lastPathComponent)
+        .navigationTitle(path.isEmpty ? root.displayName : currentURL.lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -243,10 +289,14 @@ struct FolderBrowserView: View {
             scan()
         }
         .onAppear {
-            _ = folder.url.startAccessingSecurityScopedResource()
+            if root.isScoped {
+                _ = root.url.startAccessingSecurityScopedResource()
+            }
         }
         .onDisappear {
-            folder.url.stopAccessingSecurityScopedResource()
+            if root.isScoped {
+                root.url.stopAccessingSecurityScopedResource()
+            }
         }
         .sheet(item: $viewerSelection) { selection in
             LocalImageViewer(images: currentImageList, startIndex: selection.index)
