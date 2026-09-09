@@ -141,24 +141,28 @@ struct MountedFoldersView: View {
             } message: {
                 Text("将打开系统文件夹选择器：\n① 进入你要挂载的文件夹\n② 点右上角蓝色按钮（显示「打开」或「完成」）\n③ 返回后自动挂载并列出内容")
             }
-            .sheet(isPresented: $showFolderPicker) {
-                UIKitDocumentPicker(
-                    contentTypes: [.folder],
-                    allowsMultipleSelection: false
-                ) { urls in
-                    showFolderPicker = false
-                    guard let url = urls.first else {
-                        showToast("未选择文件夹")
-                        return
+            .onChange(of: showFolderPicker) { showing in
+                if showing {
+                    DispatchQueue.main.async {
+                    DocumentPickerPresenter.shared.present(
+                        contentTypes: [.folder],
+                        allowsMultipleSelection: false
+                    ) { urls in
+                        showFolderPicker = false
+                        guard let url = urls.first else {
+                            showToast("未选择文件夹")
+                            return
+                        }
+                        if let err = vm.mount(url: url) {
+                            showToast("挂载失败：\(err)")
+                        } else {
+                            showToast("已挂载：\(url.lastPathComponent)")
+                        }
+                        tabRouter.selection = 2
+                    } onCancel: {
+                        showFolderPicker = false
                     }
-                    if let err = vm.mount(url: url) {
-                        showToast("挂载失败：\(err)")
-                    } else {
-                        showToast("已挂载：\(url.lastPathComponent)")
                     }
-                    tabRouter.selection = 2
-                } onCancel: {
-                    showFolderPicker = false
                 }
             }
             .overlay(alignment: .top) {

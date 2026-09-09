@@ -113,17 +113,21 @@ struct MyImagesView: View {
                     .accessibilityLabel("从文件夹导入")
                 }
             }
-            .sheet(isPresented: $showFilePicker) {
-                UIKitDocumentPicker(
-                    contentTypes: [.image, .movie],
-                    allowsMultipleSelection: false
-                ) { urls in
-                    showFilePicker = false
-                    importItems(urls)
-                    tabRouter.selection = 1
-                } onCancel: {
-                    showFilePicker = false
-                    showToast("未选择文件")
+            .onChange(of: showFilePicker) { showing in
+                if showing {
+                    DispatchQueue.main.async {
+                    DocumentPickerPresenter.shared.present(
+                        contentTypes: [.image, .movie],
+                        allowsMultipleSelection: false
+                    ) { urls in
+                        showFilePicker = false
+                        importItems(urls)
+                        tabRouter.selection = 1
+                    } onCancel: {
+                        showFilePicker = false
+                        showToast("未选择文件")
+                    }
+                    }
                 }
             }
             .onChange(of: photosPickerItems) { items in
