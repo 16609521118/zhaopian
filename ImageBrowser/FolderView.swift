@@ -79,8 +79,7 @@ struct MountedFoldersView: View {
 
                         Section("App 内文件夹（从「文件」App 放入）") {
                             if sandboxFolders.isEmpty {
-                                Text("用系统「文件」App 把整个文件夹放进
-「我的 iPhone → 图览」，回到本页即可浏览")
+                                Text("用系统「文件」App 把整个文件夹放进\n「我的 iPhone → 图览」，回到本页即可浏览")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             } else {
