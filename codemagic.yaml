@@ -1,0 +1,34 @@
+# Codemagic 不签名构建 unsigned IPA
+# 用法：把本仓库推到 GitHub / GitLab / Bitbucket 后，在 Codemagic 添加该仓库，
+#       选择本 workflow（ios-unsigned）即可触发构建，产物为未签名的 .ipa
+workflows:
+  ios-unsigned:
+    name: iOS Unsigned IPA
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+    scripts:
+      - name: 构建 unsigned .app
+        script: |
+          set -e
+          xcodebuild \
+            -project LocalMountPlayer.xcodeproj \
+            -scheme LocalMountPlayer \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+      - name: 打包 unsigned IPA
+        script: |
+          set -e
+          mkdir -p build/Payload
+          cp -R "build/Build/Products/Release-iphoneos/LocalMountPlayer.app" build/Payload/
+          cd build
+          zip -qry LocalMountPlayer-unsigned.ipa Payload
+    artifacts:
+      - build/LocalMountPlayer-unsigned.ipa
+      - build/Build/Products/Release-iphoneos/LocalMountPlayer.app
